@@ -48,6 +48,7 @@ import {
   readProxyStartRecord,
   recordProxyStarts,
 } from "./infrastructure/config/proxy-start-record.ts";
+import { installSelfUpdate } from "./infrastructure/npm/self-update.ts";
 import { PortlessRegistry } from "./infrastructure/portless/portless-registry.ts";
 import { inspectRoutesFile, resolveStateDir } from "./infrastructure/portless/state-files.ts";
 import { DockerContainers } from "./infrastructure/system/docker-containers.ts";
@@ -257,6 +258,7 @@ export function createStudioServices(options: StudioServicesOptions = {}): Studi
             updateChecksAllowed(process.env) && (await runtime.settings()).checkForUpdates,
           fetchLatest: () => fetchLatestVersion(),
           cache: new JsonUpdateCache(updateCheckPathFor(configPath)),
+          install: () => installSelfUpdate(options.npmBin ?? "npm"),
         });
   const services: StudioServices = {
     registry,

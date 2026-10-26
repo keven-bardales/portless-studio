@@ -88,6 +88,8 @@ export const API_PATHS = {
   focusAck: "/api/focus/ack",
   /** GET returns `UpdateStatus`: whether a newer portless-studio is on npm. Read-only. */
   update: "/api/update",
+  /** POST: runs `npm install -g portless-studio` on the server. A write, so it needs the token. */
+  updateInstall: "/api/update/install",
 } as const;
 
 /**
@@ -264,6 +266,14 @@ export type UpdateStatus = {
   available: boolean;
   /** How to update, e.g. `npm i -g portless-studio`. */
   command: string;
+};
+
+/** POST /api/update/install, on success. */
+export type UpdateInstallResponse = {
+  /** The version npm installed. */
+  version: string;
+  /** What npm printed, without color codes, trimmed to its last few kilobytes. */
+  output: string;
 };
 
 /** POST /api/aliases */

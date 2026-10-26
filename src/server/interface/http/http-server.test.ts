@@ -9,6 +9,7 @@ import {
   type InstallPortlessResponse,
   type Snapshot,
   TOKEN_HEADER,
+  type UpdateInstallResponse,
 } from "../../../core/api/contract.ts";
 import { DEFAULT_CONFIG } from "../../../core/config/studio-config.ts";
 import type { DoctorCheck } from "../../../core/doctor/doctor-check.ts";
@@ -109,6 +110,10 @@ function fakeOperations() {
     proxyResult: ok("Stopped the proxy.") as Result<string, AppError>,
     studioResult: null as Result<PreparedStudioAction, AppError> | null,
     stopResult: ok({ pid: 51, port: 5173 }) as Result<{ pid: number; port: number }, AppError>,
+    updateInstallResult: ok({ version: "0.2.0", output: "added 1 package" }) as Result<
+      UpdateInstallResponse,
+      AppError
+    >,
   };
   return {
     state,
@@ -155,6 +160,10 @@ function fakeOperations() {
           available: true,
           command: "npm i -g portless-studio",
         }),
+        install: async () => {
+          calls.push("update install");
+          return state.updateInstallResult;
+        },
       },
     },
   };
@@ -305,6 +314,41 @@ describe("update notice", () => {
 
   it("is read-only", async () => {
     expect((await send("POST", API_PATHS.update, write)).status).toBe(404);
+  });
+
+  it("rejects an install without the token and does not run it", async () => {
+    const reply = await send("POST", API_PATHS.updateInstall);
+    expect(reply.status).toBe(403);
+    expect(json(reply)).toMatchObject({ error: "forbidden" });
+    expect(ops.state.calls).toEqual([]);
+  });
+
+  it("runs the update and returns the version and output", async () => {
+    const reply = await send("POST", API_PATHS.updateInstall, write);
+    expect(reply.status).toBe(200);
+    expect(json(reply)).toEqual({ version: "0.2.0", output: "added 1 package" });
+    expect(ops.state.calls).toEqual(["update install"]);
+  });
+
+  it("returns install_failed with the command to run by hand", async () => {
+    ops.state.updateInstallResult = err({
+      code: "install_failed",
+      message: "npm exited with code 243.",
+      command: "npm i -g portless-studio",
+    });
+    const reply = await send("POST", API_PATHS.updateInstall, write);
+    expect(reply.status).toBe(502);
+    expect(json(reply)).toEqual({
+      error: "install_failed",
+      message: "npm exited with code 243.",
+      command: "npm i -g portless-studio",
+    });
+  });
+
+  it("does not install on GET", async () => {
+    const reply = await send("GET", API_PATHS.updateInstall);
+    expect(reply.status).toBe(404);
+    expect(ops.state.calls).toEqual([]);
   });
 });
 
