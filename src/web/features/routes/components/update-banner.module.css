@@ -1,14 +1,19 @@
 .banner {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
   margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4);
   border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-accent-subtle);
-  color: var(--color-text);
-  font-size: var(--text-sm);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .icon {
@@ -17,19 +22,86 @@
   color: var(--color-accent-text);
 }
 
-.text {
-  flex: 1;
+.intro {
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 
-.strong {
+.title {
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
 }
 
-.code {
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+.text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.restartActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.command {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.hint {
+  color: var(--color-text-secondary);
   font-size: var(--text-xs);
+}
+
+.error {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-subtle);
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+}
+
+.errorTitle {
+  font-weight: var(--weight-semibold);
+}
+
+.errorHint {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.log {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .banner {
+    padding: var(--space-3);
+  }
 }

@@ -23,6 +23,7 @@ import {
   type StudioActionResponse,
   type StudioEvent,
   TOKEN_HEADER,
+  type UpdateInstallResponse,
   type UpdateStatus,
 } from "../../../../core/api/contract.ts";
 import { parseConfig, type StudioConfig } from "../../../../core/config/studio-config.ts";
@@ -175,6 +176,13 @@ export class HttpRoutesGateway implements RoutesGateway {
     if (!response.ok) return response;
     const status = readUpdateStatus(response.value);
     return status ? ok(status) : unreadable("an update status");
+  }
+
+  async installUpdate(): Promise<Result<UpdateInstallResponse, ApiError>> {
+    const response = await this.#send(API_PATHS.updateInstall, "POST");
+    if (!response.ok) return response;
+    const installed = readUpdateInstallResponse(response.value);
+    return installed ? ok(installed) : unreadable("an update result");
   }
 
   async getDoctor(): Promise<Result<DoctorReport, ApiError>> {
@@ -408,6 +416,13 @@ function readUpdateStatus(value: unknown): UpdateStatus | null {
   if (latest !== null && typeof latest !== "string") return null;
   if (typeof available !== "boolean") return null;
   return { current, latest, available, command };
+}
+
+function readUpdateInstallResponse(value: unknown): UpdateInstallResponse | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { version, output } = value as Record<string, unknown>;
+  if (typeof version !== "string" || typeof output !== "string") return null;
+  return { version, output };
 }
 
 function unreadable(what: string): Result<never, ApiError> {

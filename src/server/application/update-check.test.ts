@@ -1,3 +1,5 @@
+import type { Result } from "../../core/result.ts";
+import type { AppError } from "./app-error.ts";
 import {
   type UpdateCache,
   type UpdateCacheStore,
@@ -26,16 +28,19 @@ function checker(options: {
   cache?: UpdateCacheStore;
   enabled?: boolean;
   now?: number;
+  install?: () => Promise<Result<{ output: string }, AppError>>;
 }) {
   const fetchLatest = vi.fn(options.latest ?? (async () => "0.2.0"));
+  const install = options.install ? vi.fn(options.install) : undefined;
   const instance = new UpdateChecker({
     current: "0.1.0",
     enabled: async () => options.enabled ?? true,
     fetchLatest,
     cache: options.cache ?? memoryCache(),
     now: () => options.now ?? 10 * DAY,
+    ...(install ? { install } : {}),
   });
-  return { instance, fetchLatest };
+  return { instance, fetchLatest, install };
 }
 
 describe("UpdateChecker", () => {
@@ -95,6 +100,68 @@ describe("UpdateChecker", () => {
     const { instance, fetchLatest } = checker({ enabled: false });
     expect(await instance.status()).toMatchObject({ latest: null, available: false });
     expect(fetchLatest).not.toHaveBeenCalled();
+  });
+});
+
+describe("UpdateChecker.install", () => {
+  it("runs the injected install and reports the version it was told was latest", async () => {
+    const { instance, install } = checker({
+      install: async () => ({ ok: true, value: { output: "added 1 package in 2s" } }),
+    });
+    expect(await instance.install()).toEqual({
+      ok: true,
+      value: { version: "0.2.0", output: "added 1 package in 2s" },
+    });
+    expect(install).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses when no newer version is available, without running install", async () => {
+    const { instance, install } = checker({
+      latest: async () => "0.1.0",
+      install: async () => ({ ok: true, value: { output: "" } }),
+    });
+    expect(await instance.install()).toMatchObject({
+      ok: false,
+      error: { code: "invalid_request" },
+    });
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it("refuses when this backend cannot install updates", async () => {
+    const { instance } = checker({});
+    expect(await instance.install()).toMatchObject({ ok: false, error: { code: "unsupported" } });
+  });
+
+  it("carries the update command to run by hand when npm fails", async () => {
+    const { instance } = checker({
+      install: async () => ({
+        ok: false,
+        error: { code: "install_failed", message: "npm exited with code 243." },
+      }),
+    });
+    expect(await instance.install()).toEqual({
+      ok: false,
+      error: {
+        code: "install_failed",
+        message: "npm exited with code 243.",
+        command: "npm i -g portless-studio",
+      },
+    });
+  });
+
+  it("rejects a second install while one is running", async () => {
+    let calls = 0;
+    const { instance } = checker({
+      install: async () => {
+        calls += 1;
+        return { ok: true, value: { output: "" } };
+      },
+    });
+    const first = instance.install();
+    const second = await instance.install();
+    expect(second).toMatchObject({ ok: false, error: { code: "install_in_progress" } });
+    expect((await first).ok).toBe(true);
+    expect(calls).toBe(1);
   });
 });
 

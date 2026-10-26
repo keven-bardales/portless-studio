@@ -1,5 +1,7 @@
-import type { UpdateStatus } from "../../core/api/contract.ts";
+import type { UpdateInstallResponse, UpdateStatus } from "../../core/api/contract.ts";
+import { err, ok, type Result } from "../../core/result.ts";
 import { isNewerVersion, UPDATE_COMMAND } from "../../core/updates/version.ts";
+import { type AppError, appError } from "./app-error.ts";
 
 /** When Studio last asked npm, and what it answered (null when the request failed). */
 export type UpdateCache = { checkedAt: number; latest: string | null };
@@ -19,6 +21,8 @@ export type UpdateCheckerOptions = {
   fetchLatest: () => Promise<string | null>;
   cache: UpdateCacheStore;
   now?: () => number;
+  /** Runs `npm install -g portless-studio`; omitted where Studio cannot install updates itself. */
+  install?: () => Promise<Result<{ output: string }, AppError>>;
 };
 
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -28,10 +32,43 @@ export class UpdateChecker {
   readonly #options: UpdateCheckerOptions;
   readonly #now: () => number;
   #pending: Promise<string | null> | null = null;
+  #installing = false;
 
   constructor(options: UpdateCheckerOptions) {
     this.#options = options;
     this.#now = options.now ?? Date.now;
+  }
+
+  /**
+   * Runs `npm install -g portless-studio` for the version `status()` last reported as available.
+   * Refuses with `install_in_progress` while another install runs, `invalid_request` when no
+   * newer version is known, and `install_failed` (carrying `UPDATE_COMMAND` to run by hand
+   * instead) when npm itself fails.
+   */
+  async install(): Promise<Result<UpdateInstallResponse, AppError>> {
+    if (!this.#options.install) {
+      return err(appError("unsupported", "Studio cannot install updates on this backend."));
+    }
+    if (this.#installing) {
+      return err(appError("install_in_progress", "An update is already installing."));
+    }
+    // Set before the first `await`: two calls arriving back to back must never both pass the
+    // check above and both start npm.
+    this.#installing = true;
+    try {
+      const status = await this.status();
+      if (!status.available || status.latest === null) {
+        return err(appError("invalid_request", "No newer version is available."));
+      }
+      const latest = status.latest;
+      const installed = await this.#options.install();
+      if (!installed.ok) {
+        return err(appError(installed.error.code, installed.error.message, UPDATE_COMMAND));
+      }
+      return ok({ version: latest, output: installed.value.output });
+    } finally {
+      this.#installing = false;
+    }
   }
 
   async status(): Promise<UpdateStatus> {
