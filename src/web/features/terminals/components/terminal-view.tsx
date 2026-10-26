@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { TerminalAppearance } from "../../../../core/config/studio-config.ts";
+import { copyText } from "../../../shared/lib/clipboard.ts";
 import { Icon } from "../../../shared/ui/icons/icon.tsx";
+import { isCopyShortcut } from "../hooks/copy-shortcut.ts";
 import { cssVar, terminalTheme } from "../hooks/terminal-theme.ts";
 import type { TerminalEngine } from "../hooks/xterm-loader.ts";
 import styles from "./terminal-view.module.css";
@@ -99,7 +101,13 @@ export function TerminalView({
         element.addEventListener("wheel", settleSoon, { passive: true });
         element.addEventListener("touchend", settleSoon, { passive: true });
         const typed = term.onData((text) => latest.current.onInput(text));
-        term.attachCustomKeyEventHandler((event) => !latest.current.reservedKey?.(event));
+        term.attachCustomKeyEventHandler((event) => {
+          if (event.type === "keydown" && term.hasSelection() && isCopyShortcut(event)) {
+            void copyText(term.getSelection());
+            return false;
+          }
+          return !latest.current.reservedKey?.(event);
+        });
         const stop = latest.current.connect((text) => {
           const follow = latest.current.autoScroll && !paused.current;
           const held = term.buffer.active.viewportY;
