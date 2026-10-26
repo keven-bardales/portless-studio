@@ -17,6 +17,8 @@ function fakeEngine() {
     options: Record<string, unknown>;
     /** What xterm.js would do with a key: false means the page keeps it. */
     keyHandler: (event: KeyboardEvent) => boolean;
+    /** Stands in for a live text selection; empty means none, like real xterm.js at rest. */
+    selected: string;
   }[] = [];
   const engine: TerminalEngine = {
     createTerminal: () => {
@@ -29,6 +31,7 @@ function fakeEngine() {
         options,
         type: (text: string) => onData(text),
         keyHandler: (_event: KeyboardEvent) => true,
+        selected: "",
       };
       screens.push(screen);
       const terminal = {
@@ -45,6 +48,8 @@ function fakeEngine() {
         focus: () => {
           screen.focused += 1;
         },
+        hasSelection: () => screen.selected !== "",
+        getSelection: () => screen.selected,
         attachCustomKeyEventHandler: (handler: (event: KeyboardEvent) => boolean) => {
           screen.keyHandler = handler;
         },
@@ -787,6 +792,22 @@ describe("terminal workspace", () => {
 
     fireEvent.keyDown(document.body, { key: "b", ctrlKey: true });
     expect(within(terminalsPanel).getByRole("tablist", { name: "Open terminals" })).toBeTruthy();
+  });
+
+  it("copies a selection on Ctrl+C instead of sending it to the shell", async () => {
+    const { terminals, screens, user } = setup();
+    await twoTerminals(terminals);
+    await user.click(screen.getByRole("button", { name: /Show terminals/ }));
+    await panel();
+    await waitFor(() => expect(screens).toHaveLength(1));
+
+    const ctrlC = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
+    expect(screens[0]?.keyHandler(ctrlC)).toBe(true);
+
+    // biome-ignore lint/style/noNonNullAssertion: asserted present by the toHaveLength(1) check above.
+    screens[0]!.selected = "selected output";
+    expect(screens[0]?.keyHandler(ctrlC)).toBe(false);
+    await waitFor(async () => expect(await navigator.clipboard.readText()).toBe("selected output"));
   });
 
   it("goes full screen with its button or Ctrl+Shift+F, keeps it on reload and leaves with Esc", async () => {
