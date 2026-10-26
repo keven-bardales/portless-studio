@@ -2,6 +2,17 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.2.0 (2026-10-26)
+
+- The update notice can now update Studio itself: Update now runs `npm i -g portless-studio` on
+  the server and offers a restart once it finishes, instead of only showing the command to run by
+  hand. The command stays as a fallback when the server cannot install updates, when the install
+  fails, or for anyone who would rather run it themselves.
+
+- Selecting text in a terminal and pressing `Ctrl+C` (`Cmd+C` on macOS) now copies it, instead of
+  sending the interrupt signal to the shell. With no selection, `Ctrl+C` still sends the signal as
+  before.
+
 ## 0.1.5 (2026-10-25)
 
 - Simultaneous terminal restarts share one replacement. Stop, Close and Studio shutdown cancel
