@@ -2,6 +2,13 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.2.1 (2026-10-28)
+
+- Terminals whose command already ended no longer hold a slot against the limit of 32. Starting a
+  terminal closes the ended ones to make room, the one that ended longest ago first, and only as
+  many as the new command needs, so a list of finished commands no longer blocks a new one. With
+  all 32 commands still running, Studio still refuses and asks you to stop one.
+
 ## 0.2.0 (2026-10-26)
 
 - The update notice can now update Studio itself: Update now runs `npm i -g portless-studio` on
