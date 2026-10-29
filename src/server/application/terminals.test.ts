@@ -362,6 +362,61 @@ describe("TerminalManager", () => {
     expect(manager.list()).toHaveLength(2);
   });
 
+  it("closes a terminal on its own once its command has been ended for the keep window", async () => {
+    vi.useFakeTimers();
+    let clock = 1_000;
+    const { manager, spawned } = setup({ closeEndedAfterMs: 1_000, now: () => clock });
+    await manager.create({ cwd: "/work/shop", command: "a" }, { trusted: false });
+    await manager.create({ cwd: "/work/shop", command: "b" }, { trusted: false });
+    spawned[0]?.process.exit(0);
+
+    clock = 2_000;
+    vi.advanceTimersByTime(1_000);
+
+    expect(manager.list().map((item) => item.id)).toEqual(["t2"]);
+    expect(spawned[1]?.process.calls).toEqual([]);
+  });
+
+  it("keeps an ended terminal until the keep window passes", async () => {
+    vi.useFakeTimers();
+    let clock = 1_000;
+    const { manager, spawned } = setup({ closeEndedAfterMs: 10_000, now: () => clock });
+    await manager.create({ cwd: "/work/shop", command: "a" }, { trusted: false });
+    spawned[0]?.process.exit(1);
+
+    clock = 9_000;
+    vi.advanceTimersByTime(8_000);
+
+    expect(manager.get("t1")).toMatchObject({ status: "exited", exitCode: 1 });
+  });
+
+  it("never closes a terminal whose command is still running", async () => {
+    vi.useFakeTimers();
+    let clock = 1_000;
+    const { manager, spawned } = setup({ closeEndedAfterMs: 1_000, now: () => clock });
+    await manager.create({ cwd: "/work/shop", command: "a" }, { trusted: false });
+    await manager.create({ cwd: "/work/shop", command: "b" }, { trusted: false });
+    spawned[1]?.process.exit(0);
+
+    clock = 1_000_000;
+    vi.advanceTimersByTime(999_000);
+
+    expect(manager.list().map((item) => item.id)).toEqual(["t1"]);
+    expect(manager.get("t1")?.status).toBe("running");
+    expect(spawned[0]?.process.calls).toEqual([]);
+  });
+
+  it("keeps the terminals a Studio restart stopped, so they can be run again later", async () => {
+    vi.useFakeTimers();
+    const history = memoryHistory({ running: [savedDev] });
+    const { manager } = setup({ closeEndedAfterMs: 1_000, history });
+    await manager.restore("ask");
+
+    vi.advanceTimersByTime(600_000);
+
+    expect(manager.list().map((item) => [item.id, item.stoppedByRestart])).toEqual([["t1", true]]);
+  });
+
   it("names the first new port the command opens in its folder", async () => {
     const { manager, state, aliases, change, listeners } = setup();
     state.detected = [

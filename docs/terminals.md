@@ -159,6 +159,12 @@ terminals whose command already ended, the one that ended longest ago first, so 
 finished commands never stops you from running a new one. When all 32 are still running, Studio
 refuses the new command and asks you to stop one.
 
+A terminal whose command ended is closed on its own an hour after it ended, so a day of work does
+not leave a list of finished commands behind. The hour is there to read why something failed: until
+it passes the terminal stays, with its output and its Restart button. A command still running is
+never closed this way, however long it has been running, and neither are the terminals a Studio
+restart stopped, which stay listed until you run them again or close them.
+
 Terminals belong to the Studio that runs them. When Studio stops, every command still running is
 sent SIGTERM and SIGKILL. If Studio crashes instead of stopping, commands started in their own
 process group may keep running.
