@@ -1,6 +1,6 @@
 {
   "name": "portless-studio",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A local web dashboard for portless: see every dev server, name its port and open it.",
   "license": "MIT",
   "author": "Keven Bardales",
