@@ -104,6 +104,11 @@ export type TerminalManagerOptions = {
   /** Wait between Ctrl+C, SIGTERM and SIGKILL. */
   graceMs?: number;
   maxTerminals?: number;
+  /**
+   * How long a terminal whose command has ended is kept before Studio closes it on its own; 0
+   * keeps every ended terminal until the person closes it or its slot is needed.
+   */
+  closeEndedAfterMs?: number;
   /** How long `run` waits for the command to open a port before giving up naming it. */
   namingTimeoutMs?: number;
   /** Links listening processes to terminals; without it terminals list no ports. */
@@ -125,6 +130,11 @@ export type RequestOrigin = { trusted: boolean; picked?: boolean };
 const DEFAULT_MAX_OUTPUT = 2 * 1024 * 1024;
 const DEFAULT_GRACE_MS = 3_000;
 const DEFAULT_MAX_TERMINALS = 32;
+/**
+ * An hour is long enough to come back and read why a command failed, and short enough that a day
+ * of work does not leave a list of finished commands behind.
+ */
+const DEFAULT_CLOSE_ENDED_AFTER_MS = 60 * 60_000;
 const DEFAULT_NAMING_TIMEOUT_MS = 3 * 60_000;
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
@@ -182,6 +192,7 @@ export class TerminalManager {
   readonly #maxOutput: number;
   readonly #graceMs: number;
   readonly #maxTerminals: number;
+  readonly #closeEndedAfterMs: number;
   readonly #namingTimeoutMs: number;
   readonly #processTree: ProcessTree | undefined;
   readonly #homeDir: string | undefined;
@@ -189,6 +200,7 @@ export class TerminalManager {
   readonly #persistDelayMs: number;
   #recent: Record<string, string[]> | null = null;
   #persistTimer: NodeJS.Timeout | undefined;
+  #endedSweepTimer: NodeJS.Timeout | undefined;
   #closing = false;
   readonly #entries = new Map<string, Entry>();
   readonly #watchers = new Set<() => void>();
@@ -208,6 +220,7 @@ export class TerminalManager {
     this.#maxOutput = options.maxOutputChars ?? DEFAULT_MAX_OUTPUT;
     this.#graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
     this.#maxTerminals = options.maxTerminals ?? DEFAULT_MAX_TERMINALS;
+    this.#closeEndedAfterMs = options.closeEndedAfterMs ?? DEFAULT_CLOSE_ENDED_AFTER_MS;
     this.#namingTimeoutMs = options.namingTimeoutMs ?? DEFAULT_NAMING_TIMEOUT_MS;
     this.#processTree = options.processTree;
     this.#homeDir = options.homeDir;
@@ -466,6 +479,35 @@ export class TerminalManager {
     }
   }
 
+  /**
+   * Closes the terminals whose command ended more than `closeEndedAfterMs` ago, then waits for the
+   * next one to come due, so a list of finished commands empties itself while a command that just
+   * failed stays long enough to read. A command still running is never closed, and neither are the
+   * terminals a Studio restart stopped: those are listed so they can be run again.
+   */
+  #sweepEnded(): void {
+    clearTimeout(this.#endedSweepTimer);
+    this.#endedSweepTimer = undefined;
+    if (this.#closeEndedAfterMs <= 0 || this.#closing) return;
+    const now = this.#now();
+    let next = Number.POSITIVE_INFINITY;
+    for (const entry of [...this.#entries.values()]) {
+      if (entry.info.status !== "exited" || entry.info.endedAt === null) continue;
+      const due = entry.info.endedAt + this.#closeEndedAfterMs;
+      if (due <= now) this.remove(entry.info.id);
+      else next = Math.min(next, due);
+    }
+    if (next === Number.POSITIVE_INFINITY) return;
+    this.#endedSweepTimer = setTimeout(
+      () => {
+        this.#endedSweepTimer = undefined;
+        this.#sweepEnded();
+      },
+      Math.max(next - now, 1),
+    );
+    this.#endedSweepTimer.unref?.();
+  }
+
   /** Closes the terminal; its command, if still running, is killed. */
   remove(id: string): Result<void, AppError> {
     const entry = this.#entries.get(id);
@@ -507,6 +549,8 @@ export class TerminalManager {
       this.#persistNow(true);
       this.#closing = true;
       clearTimeout(this.#persistTimer);
+      clearTimeout(this.#endedSweepTimer);
+      this.#endedSweepTimer = undefined;
     }
     for (const entry of this.#entries.values()) {
       this.#clearTimers(entry);
@@ -555,6 +599,7 @@ export class TerminalManager {
       this.#publishStatus(entry);
       this.#schedulePersist();
       this.#updateWorkspaceWatch();
+      this.#sweepEnded();
     });
     return ok(undefined);
   }
