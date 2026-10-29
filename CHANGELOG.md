@@ -2,6 +2,14 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.2.2 (2026-10-29)
+
+- A terminal whose command ended is now closed an hour after it ended, so a Studio left open for a
+  day no longer lists dozens of finished commands. The hour is there to come back and read why one
+  failed: until it passes the terminal keeps its output and its Restart button. Commands still
+  running are never closed this way, and neither are the terminals a Studio restart stopped, which
+  stay listed until you run them again or close them.
+
 ## 0.2.1 (2026-10-28)
 
 - Terminals whose command already ended no longer hold a slot against the limit of 32. Starting a
