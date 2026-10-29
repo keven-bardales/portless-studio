@@ -154,7 +154,10 @@ every step stops the whole process tree with `taskkill /T /F`.
 
 Each terminal keeps its last 2 MB of output in memory. Every character has a fixed number, so a
 page or an agent can ask for only what came after the last part it read (`?from=<n>`), and learns
-when older output was dropped. Studio keeps at most 32 terminals; close one to open another.
+when older output was dropped. Studio keeps at most 32 terminals. Starting one past that closes the
+terminals whose command already ended, the one that ended longest ago first, so a list full of
+finished commands never stops you from running a new one. When all 32 are still running, Studio
+refuses the new command and asks you to stop one.
 
 Terminals belong to the Studio that runs them. When Studio stops, every command still running is
 sent SIGTERM and SIGKILL. If Studio crashes instead of stopping, commands started in their own

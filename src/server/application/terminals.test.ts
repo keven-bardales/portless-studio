@@ -315,6 +315,53 @@ describe("TerminalManager", () => {
     expect(spawned[1]?.process.calls).toEqual(["terminate", "kill"]);
   });
 
+  it("makes room for a new command by closing the terminal that ended longest ago", async () => {
+    let clock = 1_000;
+    const { manager, spawned } = setup({ maxTerminals: 3, now: () => clock });
+    for (const command of ["a", "b", "c"]) {
+      await manager.create({ cwd: "/work/shop", command }, { trusted: false });
+    }
+    clock = 3_000;
+    spawned[1]?.process.exit(0);
+    clock = 2_000;
+    spawned[0]?.process.exit(0);
+
+    const created = await manager.create({ cwd: "/work/shop", command: "d" }, { trusted: false });
+
+    expect(created.ok).toBe(true);
+    expect(manager.list().map((item) => item.id)).toEqual(["t2", "t3", "t4"]);
+    expect(spawned[0]?.process.calls).toEqual([]);
+  });
+
+  it("closes only as many ended terminals as the new command needs", async () => {
+    const { manager, spawned } = setup({ maxTerminals: 2 });
+    await manager.create({ cwd: "/work/shop", command: "a" }, { trusted: false });
+    await manager.create({ cwd: "/work/shop", command: "b" }, { trusted: false });
+    spawned[0]?.process.exit(0);
+    spawned[1]?.process.exit(0);
+
+    await manager.create({ cwd: "/work/shop", command: "c" }, { trusted: false });
+
+    expect(manager.list().map((item) => item.id)).toEqual(["t2", "t3"]);
+    expect(manager.get("t2")?.status).toBe("exited");
+  });
+
+  it("refuses a new command when every terminal is still running", async () => {
+    const { manager } = setup({ maxTerminals: 2 });
+    await manager.create({ cwd: "/work/shop", command: "a" }, { trusted: false });
+    await manager.create({ cwd: "/work/shop", command: "b" }, { trusted: false });
+
+    const created = await manager.create({ cwd: "/work/shop", command: "c" }, { trusted: false });
+
+    expect(created.ok).toBe(false);
+    if (created.ok) return;
+    expect(created.error.code).toBe("too_many_terminals");
+    expect(created.error.message).toBe(
+      "Studio already runs 2 terminals and all of them are still running. Stop one first.",
+    );
+    expect(manager.list()).toHaveLength(2);
+  });
+
   it("names the first new port the command opens in its folder", async () => {
     const { manager, state, aliases, change, listeners } = setup();
     state.detected = [

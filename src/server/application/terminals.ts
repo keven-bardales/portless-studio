@@ -253,11 +253,12 @@ export class TerminalManager {
     request: CreateTerminalRequest,
     origin: RequestOrigin,
   ): Promise<Result<TerminalInfo, AppError>> {
+    this.#closeEndedForRoom(1);
     if (this.#entries.size >= this.#maxTerminals) {
       return err(
         appError(
           "too_many_terminals",
-          `Studio already runs ${this.#maxTerminals} terminals. Close one first.`,
+          `Studio already runs ${this.#maxTerminals} terminals and all of them are still running. Stop one first.`,
         ),
       );
     }
@@ -445,6 +446,24 @@ export class TerminalManager {
     this.#updateWorkspaceWatch();
     if (this.#watchers.size > 0) void this.#refreshPorts();
     return ok({ ...entry.info });
+  }
+
+  /**
+   * Closes terminals whose command already ended until there is room for `wanted` more, oldest end
+   * first. A terminal nobody is running holds a slot and 2 MB of output only until that slot is
+   * needed, so starting a command does not ask the person to tidy up first.
+   */
+  #closeEndedForRoom(wanted: number): void {
+    let room = this.#maxTerminals - this.#entries.size;
+    if (room >= wanted) return;
+    const ended = [...this.#entries.values()]
+      .filter((entry) => entry.info.status === "exited")
+      .sort((a, b) => (a.info.endedAt ?? 0) - (b.info.endedAt ?? 0));
+    for (const entry of ended) {
+      if (room >= wanted) return;
+      this.remove(entry.info.id);
+      room += 1;
+    }
   }
 
   /** Closes the terminal; its command, if still running, is killed. */
